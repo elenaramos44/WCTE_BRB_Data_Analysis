@@ -31,13 +31,15 @@ def sort_run_files(path):
     run_files = glob.glob(path)
     return sorted(run_files, key=extract_p_number)
 
-def get_part_files():
+def get_part_files(run_files):
     """
-    After the run_files list is created. This Created the list with all the part_file numbers.
+    Inputs the run_files list created with sort_run_files.
+    This creates the list with all the part_file numbers.
+    Returns that list.
     """
     return [extract_p_number(file) for file in run_files]
 
-def selectec_good_events(part_file):
+def selectec_good_events(part_file, run_files):
     """
     DEPRECATED
     Input a part_file number.
@@ -57,7 +59,7 @@ def selectec_good_events(part_file):
 
     return good_events
 
-def select_good_parts(parts):
+def select_good_parts(parts, run_files):
     """
     Input the part_files numbers list created with get_part_files.
     Selects the part files that are not empty.
@@ -65,7 +67,7 @@ def select_good_parts(parts):
     """
     return [part_file for part_file in tqdm(parts, total=len(parts)) if np.any(uproot.open(run_files[part_file]+":WCTEReadoutWindows")["event_number"].array())]
 
-def get_files_from_part(part_file):
+def get_files_from_part(part_file, run_files):
     """
     Input a part_file number and the run_files list created with sort_run_files.
     Extracts all the card_id, channel_id, charge and time information from the hits.

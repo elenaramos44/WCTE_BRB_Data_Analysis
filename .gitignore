@@ -5,3 +5,4 @@ DataCleaning.ipynb
 *.pdf
 *.png
 *.csv
+__pycache__
