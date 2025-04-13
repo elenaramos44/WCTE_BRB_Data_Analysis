@@ -65,7 +65,7 @@ def select_good_parts(parts, run_files):
     Selects the part files that are not empty.
     Returns an updated list of usable part_files.
     """
-    return [part_file for part_file in tqdm(parts, total=len(parts)) if np.any(uproot.open(run_files[part_file]+":WCTEReadoutWindows")["event_number"].array())]
+    return [part_file for part_file in tqdm(parts, total=len(parts), desc="Selecting Good Parts") if np.any(uproot.open(run_files[part_file]+":WCTEReadoutWindows")["event_number"].array())]
 
 def get_files_from_part(part_file, run_files):
     """
@@ -143,7 +143,7 @@ def df_event_summary(df, ids, map):
     
     return pd.DataFrame(xdf)
 
-def concat_dfs(good_parts):
+def concat_dfs(good_parts, run_files):
     """
     Inputs the good_parts list.
     Creates the DataFrame for every part_file using create_df_from_file and get_files_from_part.
@@ -153,8 +153,8 @@ def concat_dfs(good_parts):
     dfs = []
     evt_offset = 0
 
-    for ipar in tqdm(good_parts, total=len(good_parts)):
-        df = create_df_from_file(get_files_from_part(ipar))
+    for ipar in tqdm(good_parts, total=len(good_parts), desc="Creating DataFrames For Each Part"):
+        df = create_df_from_file(get_files_from_part(ipar, run_files))
         df['evt'] += evt_offset
         evt_offset = df['evt'].max() + 1  
         dfs.append(df)
@@ -166,7 +166,8 @@ def create_df_all(df_concat, map):
     Inputs the DataFrame with all concatenated part_file information and the channel mapping.
     Returns a big DataFrame with all the info from all the channels.
     """
-    return df_event_summary(df_concat, map.keys())
+    print("Creating big DataFrame...")
+    return df_event_summary(df_concat, map.keys(), map)
 
 def df_extend(df):
     """ input a BRB-Beam ntuple and extend it: 
@@ -180,7 +181,7 @@ def df_extend(df):
         vv = oper([df[lab].values for lab in labs], axis = 0)
         return vv
     
-    df['T0_time'] = _operate(['T0-0','T0-1'], ['L_time',], np.mean) ## ??? WHY THERE is not R_time ???
+    df['T0_time'] = _operate(['T0-0','T0-1'], ['L_time','R_time'], np.mean) ## ??? WHY THERE is not R_time ???
     df['T1_time'] = _operate(['T1-0','T1-1'], ['L_time','R_time'], np.mean)
     df['T1-T0_time'] = df['T1_time'] - df['T0_time']
 
