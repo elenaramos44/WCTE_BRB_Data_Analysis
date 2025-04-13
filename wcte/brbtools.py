@@ -129,14 +129,22 @@ def df_event_summary(df, ids, map):
         _groups =  df[sel].groupby("evt")
         
         nhits         = _groups.count()["channel"]
-        xhits         = np.zeros(nevts, int)
+        xhits         = np.empty(nevts)
+        xhits[:]      = np.nan
         xhits[ievts]  = nhits
         qtots         = _groups.sum()["charge"]
-        xqtots        = np.zeros(nevts, float)
+        xqtots        = np.empty(nevts)
+        xqtots[:]        = np.nan
         xqtots[ievts] = qtots
         ttots         = _groups.mean()["time"]
-        xttots        = np.zeros(nevts, float)
+        xttots        = np.empty(nevts)
+        xttots[:]        = np.nan
         xttots[ievts] = ttots
+        """WARNING!
+        Now all zeroes generated in the DataFrame due to a hit non-existing in that event for that channel
+        is converted into a nan value. This COULD cause some issues that can be easily solved if you follow
+        instructions at the end of df_extend.
+        """
 
         name = map[(card, channel)]
         xdf[name+"_nhits"]  = xhits
@@ -184,7 +192,7 @@ def df_extend(df, numACTs):
     return extended dt
     """
 
-    def _operate(sens, vars, oper = np.sum):
+    def _operate(sens, vars, oper = np.nansum):
         labs = [sen + var for var in vars for sen in sens]
         vv = oper([df[lab].values for lab in labs], axis = 0)
         return vv
@@ -194,12 +202,24 @@ def df_extend(df, numACTs):
     df['T1-T0_time'] = df['T1_time'] - df['T0_time']
 
     for i in range(numACTs):
-        df['ACT'+str(i)+'_charge'] = _operate(['ACT'+str(i)+'-',], ['L_charge', 'R_charge'], np.nanmean)
+        df['ACT'+str(i)+'_charge'] = _operate(['ACT'+str(i)+'-',], ['L_charge', 'R_charge'], np.nansum)
 
     df['ACT_g1_charge'] = np.sum([df['ACT'+str(i)+'_charge'] for i in (0, 1, 2)], axis = 0)
     df['ACT_g2_charge'] = np.sum([df['ACT'+str(i)+'_charge'] for i in (3, 4, 5)], axis = 0)
 
     tof_keys = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 'A', 'B', 'C', 'D', 'E', 'F']
-    df['TOF_nhits'] = _operate(['TOF-'+str(k) for k in tof_keys], ['_nhits', ], np.sum)
+    df['TOF_nhits'] = _operate(['TOF-'+str(k) for k in tof_keys], ['_nhits', ], np.nansum)
+    """ WARNING!
+    Now that all the zeros have been converted into nan values, when we perform a numpy nanOperation
+    in a full nan array, it returns a nan value, so then when you filter one of these windows and try
+    to plot it with hist2d you will get an error.
+    You can check wether your filtered variables have nan values doing:
+    print("variable with NaN:", np.isnan(variable).sum())
+    Then you can mask your NaN values doing:
+    mask = np.isfinite(variable1) & np.isfinite(variable2)
+    masked_variable1 = variable1[mask]
+    masked_variable2 = variable2[mask]
+    And then plot.
+    """
 
     return df
