@@ -159,7 +159,12 @@ def concat_dfs(good_parts):
 
     return pd.concat(dfs, ignore_index=True)
 
-
+def create_df_all(df_concat, map):
+    """
+    Inputs the DataFrame with all concatenated part_file information and the channel mapping.
+    Returns a big DataFrame with all the info from all the channels.
+    """
+    return df_event_summary(df_concat, map.keys())
 
 def df_extend(df):
     """ input a BRB-Beam ntuple and extend it: 
