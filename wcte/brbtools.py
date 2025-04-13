@@ -78,19 +78,21 @@ def get_files_from_part(part_file, run_files):
     file_hit_channel_ids = tree["hit_pmt_channel_ids"].array()
     file_hit_charges     = tree["hit_pmt_charges"].array()
     file_hit_times       = tree["hit_pmt_times"].array()
+    file_window_times    = tree["window_time"].array()
+    file_event_number    = tree["event_number"].array()
 
-    return file_hit_card_ids, file_hit_channel_ids, file_hit_charges, file_hit_times
-
+    return file_hit_card_ids, file_hit_channel_ids, file_hit_charges, file_hit_times, file_window_times, file_event_number
+ 
 def create_df_from_file(files):
     """
     Input the information created with get_files_from_part.
     Creates a Pandas DataFrame with the event, card, channel, charge and time information.
     Returns the DataFrame.
     """
-    cards    = files[0]
-    channels = files[1]
-    charges  = files[2]
-    times    = files[3]
+    cards        = files[0]
+    channels     = files[1]
+    charges      = files[2]
+    hit_times    = files[3]
 
     nevents = len(cards)
     evts    = np.arange(nevents)
@@ -100,7 +102,7 @@ def create_df_from_file(files):
     xcards    = ak.flatten(cards)
     xchannels = ak.flatten(channels)
     xcharges  = ak.flatten(charges)
-    xtimes    = ak.flatten(times)
+    xtimes    = ak.flatten(hit_times)
     df = pd.DataFrame({'evt':evt_column, 'card':xcards, 'channel':xchannels, 'charge':xcharges, "time":xtimes})
     return df
 
@@ -119,7 +121,7 @@ def df_event_summary(df, ids, map):
     nevts = np.max(df.evt) + 1
     xdf   = {"evt" : np.arange(nevts)}
 
-    for  id in ids:
+    for id in ids:
         card, channel = id
         sel   = (df.card == card) & (df.channel == channel)
         ievts = df[sel].evt.unique()
@@ -143,7 +145,7 @@ def df_event_summary(df, ids, map):
     
     return pd.DataFrame(xdf)
 
-def concat_dfs(good_parts, run_files):
+def concat_dfs(good_parts, run_files, map):
     """
     Inputs the good_parts list.
     Creates the DataFrame for every part_file using create_df_from_file and get_files_from_part.
@@ -154,22 +156,28 @@ def concat_dfs(good_parts, run_files):
     evt_offset = 0
 
     for ipar in tqdm(good_parts, total=len(good_parts), desc="Creating DataFrames For Each Part"):
-        df = create_df_from_file(get_files_from_part(ipar, run_files))
+        files             = get_files_from_part(ipar, run_files)
+        df                = create_df_from_file(files)
+        df                = df_event_summary(df, map.keys(), map)
+        df["window_time"] = files[4]
+        df["evt_number"]  = files[5]
+        df["part_number"] = np.repeat(ipar, len(files[4]))
+
         df['evt'] += evt_offset
         evt_offset = df['evt'].max() + 1  
         dfs.append(df)
 
     return pd.concat(dfs, ignore_index=True)
 
-def create_df_all(df_concat, map):
-    """
-    Inputs the DataFrame with all concatenated part_file information and the channel mapping.
-    Returns a big DataFrame with all the info from all the channels.
-    """
-    print("Creating big DataFrame...")
-    return df_event_summary(df_concat, map.keys(), map)
+# def create_df_all(df_concat, map):
+#     """
+#     Inputs the DataFrame with all concatenated part_file information and the channel mapping.
+#     Returns a big DataFrame with all the info from all the channels.
+#     """
+#     print("Creating big DataFrame...")
+#     return df_event_summary(df_concat, map.keys(), map)
 
-def df_extend(df):
+def df_extend(df, numACTs):
     """ input a BRB-Beam ntuple and extend it: 
         it computes the ACT charge in each box and in the to
         it computes the time in T0, T1 and the T1-T0 time difference
@@ -181,19 +189,17 @@ def df_extend(df):
         vv = oper([df[lab].values for lab in labs], axis = 0)
         return vv
     
-    df['T0_time'] = _operate(['T0-0','T0-1'], ['L_time','R_time'], np.mean) ## ??? WHY THERE is not R_time ???
-    df['T1_time'] = _operate(['T1-0','T1-1'], ['L_time','R_time'], np.mean)
+    df['T0_time'] = _operate(['T0-0','T0-1'], ['L_time','R_time'], np.nanmean)
+    df['T1_time'] = _operate(['T1-0','T1-1'], ['L_time','R_time'], np.nanmean)
     df['T1-T0_time'] = df['T1_time'] - df['T0_time']
 
-    for i in range(6):
-        df['ACT'+str(i)+'_charge'] = _operate(['ACT'+str(i)+'-',], ['L_charge', 'R_charge'], np.mean)
+    for i in range(numACTs):
+        df['ACT'+str(i)+'_charge'] = _operate(['ACT'+str(i)+'-',], ['L_charge', 'R_charge'], np.nanmean)
 
     df['ACT_g1_charge'] = np.sum([df['ACT'+str(i)+'_charge'] for i in (0, 1, 2)], axis = 0)
     df['ACT_g2_charge'] = np.sum([df['ACT'+str(i)+'_charge'] for i in (3, 4, 5)], axis = 0)
 
     tof_keys = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 'A', 'B', 'C', 'D', 'E', 'F']
     df['TOF_nhits'] = _operate(['TOF-'+str(k) for k in tof_keys], ['_nhits', ], np.sum)
-
-    df['T4-RL'] = ((df['T4-R_nhits'] == 1) & (df['T4-L_nhits'] == 1))
 
     return df
