@@ -83,7 +83,7 @@ def get_files_from_part(part_file, run_files):
 
     return file_hit_card_ids, file_hit_channel_ids, file_hit_charges, file_hit_times, file_window_times, file_event_number
  
-def create_df_from_file(files):
+def create_df_from_file(files, part):
     """
     Input the information created with get_files_from_part.
     Creates a Pandas DataFrame with the event, card, channel, charge and time information.
@@ -93,20 +93,26 @@ def create_df_from_file(files):
     channels     = files[1]
     charges      = files[2]
     hit_times    = files[3]
+    window_times = files[4]
+    event_number = files[5]
 
     nevents = len(cards)
     evts    = np.arange(nevents)
     nhits   = [len(cards[ievt]) for ievt in evts]
     evt_column = np.repeat(evts, nhits)
+    window_time_column = np.repeat(window_times, nhits)
+    event_number_column = np.repeat(event_number, nhits)
+    part_number_column = np.repeat(part, np.sum(nhits))
 
     xcards    = ak.flatten(cards)
     xchannels = ak.flatten(channels)
     xcharges  = ak.flatten(charges)
     xtimes    = ak.flatten(hit_times)
-    df = pd.DataFrame({'evt':evt_column, 'card':xcards, 'channel':xchannels, 'charge':xcharges, "time":xtimes})
-    return df
+    df = pd.DataFrame({'evt':evt_column, "part_number": part_number_column,"event_number":event_number_column, "window_time":window_time_column, 
+                       'card':xcards, 'channel':xchannels, 'charge':xcharges, "time":xtimes})
+    return df, len(event_number)
 
-def df_event_summary(df, ids, map):
+def df_event_summary(df, map):
     """ 
     returns a DataFrame with one entry per event and the number of hits and total charge
     for the ids (each id is a pair (card ID, channel ID)).
@@ -119,9 +125,12 @@ def df_event_summary(df, ids, map):
     
     """
     nevts = np.max(df.evt) + 1
-    xdf   = {"evt" : np.arange(nevts)}
 
-    for id in ids:
+    xdf   = {"evt" : np.arange(nevts),  
+             "event_number":np.unique(df["event_number"]), 
+             "window_time":np.unique(df["window_time"])}
+    
+    for id in map.keys():
         card, channel = id
         sel   = (df.card == card) & (df.channel == channel)
         ievts = df[sel].evt.unique()
@@ -134,11 +143,11 @@ def df_event_summary(df, ids, map):
         xhits[ievts]  = nhits
         qtots         = _groups.sum()["charge"]
         xqtots        = np.empty(nevts)
-        xqtots[:]        = np.nan
+        xqtots[:]     = np.nan
         xqtots[ievts] = qtots
         ttots         = _groups.mean()["time"]
         xttots        = np.empty(nevts)
-        xttots[:]        = np.nan
+        xttots[:]     = np.nan
         xttots[ievts] = ttots
         """WARNING!
         Now all zeroes generated in the DataFrame due to a hit non-existing in that event for that channel
@@ -150,40 +159,43 @@ def df_event_summary(df, ids, map):
         xdf[name+"_nhits"]  = xhits
         xdf[name+"_charge"] = xqtots
         xdf[name+"_time"]   = xttots
-    
+
     return pd.DataFrame(xdf)
 
-def concat_dfs(good_parts, run_files, map):
-    """
-    Inputs the good_parts list.
-    Creates the DataFrame for every part_file using create_df_from_file and get_files_from_part.
-    Concatenates every histogram updating the event_id so if we have N events event_id goes up to N.
-    Returns the concatenated DataFrame.
-    """
+def concat_dfs(parts, run_files):
     dfs = []
     evt_offset = 0
+    event_number_offset = 0
+    parts_length = []
 
-    for ipar in tqdm(good_parts, total=len(good_parts), desc="Creating DataFrames For Each Part"):
-        files             = get_files_from_part(ipar, run_files)
-        df                = create_df_from_file(files)
-        df                = df_event_summary(df, map.keys(), map)
-        df["window_time"] = files[4]
-        df["evt_number"]  = files[5]
-        df["part_number"] = np.repeat(ipar, len(files[4]))
+    for ipar in tqdm(parts, total=len(parts), desc="Creating DataFrames For Each Part"):
+        files            = get_files_from_part(ipar, run_files)
+        df, part_length  = create_df_from_file(files, ipar)
 
         df['evt'] += evt_offset
+        df["event_number"] += event_number_offset
         evt_offset = df['evt'].max() + 1  
+        event_number_offset = df["event_number"].max() +1
+        parts_length.append(part_length)
         dfs.append(df)
 
-    return pd.concat(dfs, ignore_index=True)
+    return pd.concat(dfs, ignore_index=True), parts_length
 
-# def create_df_all(df_concat, map):
-#     """
-#     Inputs the DataFrame with all concatenated part_file information and the channel mapping.
-#     Returns a big DataFrame with all the info from all the channels.
-#     """
-#     print("Creating big DataFrame...")
-#     return df_event_summary(df_concat, map.keys(), map)
+def create_big_df(parts):
+    df_concat, parts_length = concat_dfs(parts)
+    parts_id = np.repeat(parts, parts_length)
+    # Create final df
+    df_all = df_event_summary(df_concat)
+
+    # Add Column
+    df_all["part_id"] = parts_id
+
+    # Relocate Column
+    cols = df_all.columns.tolist()
+    cols.insert(3, cols.pop(cols.index('part_id')))
+    df_all = df_all[cols]
+
+    return df_all
 
 def df_extend(df, numACTs):
     """ input a BRB-Beam ntuple and extend it: 
