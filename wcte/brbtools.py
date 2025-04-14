@@ -181,11 +181,18 @@ def concat_dfs(parts, run_files):
 
     return pd.concat(dfs, ignore_index=True), parts_length
 
-def create_big_df(parts):
-    df_concat, parts_length = concat_dfs(parts)
-    parts_id = np.repeat(parts, parts_length)
+def create_big_df(parts, run_files, map):
+
+    print("1. Selection of good parts")
+    good_parts = select_good_parts(parts, run_files)
+
+    print("2. Create and concatenate all the DataFrames in the Run")
+    df_concat, parts_length = concat_dfs(good_parts, run_files)
+    parts_id = np.repeat(good_parts, parts_length)
+
+    print("3. Create the Final big DataFrame with all monitors information")
     # Create final df
-    df_all = df_event_summary(df_concat)
+    df_all = df_event_summary(df_concat, map)
 
     # Add Column
     df_all["part_id"] = parts_id
