@@ -177,14 +177,6 @@ def concat_dfs(good_parts, run_files, map):
 
     return pd.concat(dfs, ignore_index=True)
 
-# def create_df_all(df_concat, map):
-#     """
-#     Inputs the DataFrame with all concatenated part_file information and the channel mapping.
-#     Returns a big DataFrame with all the info from all the channels.
-#     """
-#     print("Creating big DataFrame...")
-#     return df_event_summary(df_concat, map.keys(), map)
-
 def df_extend(df, numACTs):
     """ input a BRB-Beam ntuple and extend it: 
         it computes the ACT charge in each box and in the to
@@ -223,3 +215,18 @@ def df_extend(df, numACTs):
     """
 
     return df
+
+def full_df_mPMT(parts, run_files):
+    dfs = []
+    evt_offset = 0
+    
+    for ipar in tqdm(parts, total=len(parts), desc="Creating DataFrames For Each Part"):
+        files = get_files_from_part(ipar, run_files)
+        df    = create_df_from_file(files)
+
+        df['evt'] += evt_offset
+        evt_offset = df['evt'].max() + 1  
+    
+        dfs.append(df)
+
+    return pd.concat(dfs, ignore_index=True)
