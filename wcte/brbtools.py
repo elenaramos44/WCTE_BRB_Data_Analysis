@@ -134,11 +134,11 @@ def df_event_summary(df, ids, map):
         xhits[ievts]  = nhits
         qtots         = _groups.sum()["charge"]
         xqtots        = np.empty(nevts)
-        xqtots[:]        = np.nan
+        xqtots[:]     = np.nan
         xqtots[ievts] = qtots
         ttots         = _groups.mean()["time"]
         xttots        = np.empty(nevts)
-        xttots[:]        = np.nan
+        xttots[:]     = np.nan
         xttots[ievts] = ttots
         """WARNING!
         Now all zeroes generated in the DataFrame due to a hit non-existing in that event for that channel
