@@ -41,17 +41,19 @@ f = df_all[(df_all["T0-0L_time"].values != 0) &
            (df_all["T1-1R_time"].values != 0)].copy()
 
 df_extended = df_extend(f, 6)
-
 output_dir = f"/eos/home-d/dcostasr/SWAN_projects/2025_data/data/{run}"
 os.makedirs(output_dir, exist_ok=True)
-
 df_extended.to_parquet(path=f"{output_dir}/df_extended_goodTime.parquet", index=None)
 
 # mPMTs DF
+# DataFrame With Cards, Channels, Charge and Time. This is also important to have.
 df_concat = full_df_mPMT(good_parts, run_files)
-df_mpts = df_mpmt_sumCharge(df_concat)
-
 output_dir = f"/eos/home-d/dcostasr/SWAN_projects/2025_data/data/{run}"
 os.makedirs(output_dir, exist_ok=True)
+df_concat.to_parquet(path=f"{output_dir}/df_concat.parquet", index=None)
 
+# DataFrame With mPMTs information.
+df_mpts = df_mpmt_sumCharge(df_concat)
+output_dir = f"/eos/home-d/dcostasr/SWAN_projects/2025_data/data/{run}"
+os.makedirs(output_dir, exist_ok=True)
 df_mpts.to_parquet(path=f"{output_dir}/df_mPMTs.parquet", index=None)
