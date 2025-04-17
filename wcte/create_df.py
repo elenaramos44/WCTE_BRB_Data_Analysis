@@ -1,3 +1,4 @@
+print("Some necessart imports...")
 
 import sys
 import os
@@ -11,7 +12,7 @@ from wcte.brbtools import sort_run_files, get_part_files, select_good_parts
 from wcte.brbtools import concat_dfs, df_extend, full_df_mPMT, df_mpmt_sumCharge
 from wcte.mapping  import id_names
 
-
+print("Creating argparser...")
 parser = argparse.ArgumentParser()
 parser.add_argument('run', type=int, help='Run number. Required.')
 args = parser.parse_args()
@@ -43,14 +44,14 @@ f = df_all[(df_all["T0-0L_time"].values != 0) &
 df_extended = df_extend(f, 6)
 output_dir = f"/eos/home-d/dcostasr/SWAN_projects/2025_data/data/{run}"
 os.makedirs(output_dir, exist_ok=True)
-df_extended.to_parquet(path=f"{output_dir}/df_extended_goodTime.parquet", index=None)
+df_extended.to_parquet(path=f"{output_dir}/df_beam.parquet", index=None)
 
 # mPMTs DF
 # DataFrame With Cards, Channels, Charge and Time. This is also important to have.
 df_concat = full_df_mPMT(good_parts, run_files)
 output_dir = f"/eos/home-d/dcostasr/SWAN_projects/2025_data/data/{run}"
 os.makedirs(output_dir, exist_ok=True)
-df_concat.to_parquet(path=f"{output_dir}/df_concat.parquet", index=None)
+df_concat.to_parquet(path=f"{output_dir}/df_hits.parquet", index=None)
 
 # DataFrame With mPMTs information.
 df_mpts = df_mpmt_sumCharge(df_concat)
