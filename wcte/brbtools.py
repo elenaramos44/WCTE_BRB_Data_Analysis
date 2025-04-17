@@ -147,27 +147,41 @@ def df_event_summary(df, ids, map):
 
 def concat_dfs(good_parts, run_files, map):
     """
-    Inputs the good_parts list.
-    Creates the DataFrame for every part_file using create_df_from_file and get_files_from_part.
-    Concatenates every histogram updating the event_id so if we have N events event_id goes up to N.
-    Returns the concatenated DataFrame.
+    Inputs:
+        - good_parts list
+        - run_files list
+        - map
+    Performs: 
+        - Creates the DataFrame for every part_file using create_df_from_file and get_files_from_part.
+        - Creates the event_summary DataFrame that already has the information per event for every beam monitor channel.
+        - Keeps track of hits_df, a DataFrame with the initial variables untouched that also concatenates.
+        - Concatenates every DataFrame updating the event_id so if we have N events event_id goes up to N.
+    Returns:
+        - The event_sumary DataFrame for the whole run.
+        - The hits_dfs DataFrame with the info for all the hits in the run.
     """
     dfs = []
+    hits_dfs = []
     evt_offset = 0
 
     for ipar in tqdm(good_parts, total=len(good_parts), desc="Creating DataFrames For Each Part"):
         files             = get_files_from_part(ipar, run_files)
         df                = create_df_from_file(files)
+        hits_df           = df.copy()
         df                = df_event_summary(df, map.keys(), map)
         df["window_time"] = files[4]
         df["evt_number"]  = files[5]
         df["part_number"] = np.repeat(ipar, len(files[4]))
 
         df['evt'] += evt_offset
+        hits_df["evt"] += evt_offset
         evt_offset = df['evt'].max() + 1  
         dfs.append(df)
+        hits_dfs.append(hits_df)
 
-    return pd.concat(dfs, ignore_index=True)
+    df_concat = pd.concat(dfs, ignore_index=True)
+    df_hits_concat = pd.concat(hits_dfs, ignore_index=True)
+    return df_concat, df_hits_concat
 
 def df_extend(df, numACTs):
     """ input a BRB-Beam ntuple and extend it: 
@@ -196,65 +210,62 @@ def df_extend(df, numACTs):
 
     return df
 
-def full_df_mPMT(parts, run_files):
-    """
-    Input:
-        - The good_parts previously selected
-        - The run files
-    Performs:
-        - Creates a new dataframe with all the charge and time per hit per eventm for all events in the parts.
-    Output:
-        - The dataframe for the whole run with event, card, channel, charge and time information.
-    """
-    dfs = []
-    evt_offset = 0
-    
-    for ipar in tqdm(parts, total=len(parts), desc="Creating DataFrames For Each Part"):
-        files = get_files_from_part(ipar, run_files)
-        df    = create_df_from_file(files)
-
-        df['evt'] += evt_offset
-        evt_offset = df['evt'].max() + 1  
-    
-        dfs.append(df)
-
-    return pd.concat(dfs, ignore_index=True)
-
 def df_mpmt_sumCharge(df_all):
     """
     Input:
-        - The "df_concat" dataframe with the whole information created with "full_df_mPMT"
+        - The "df_hits_concat" dataframe with the whole information created with "concat_dfs"
     Performs:
-        - Removes cards 130, 131 adn 132 since those are not mPMTs
         - Creates a new dictionary with:
             - Number of events in run
             - Charge per event per mPMT summed
             - Time per event per mPMT averaged
             - nHits per event per mPMT
+            - Filters beam monitor cards 
             - Charge per event summed
             - Time per event averaged 
             - nHits per event
     Output:
         - A new dataframe with this information
     """
-    print("Masking out cards 130, 131 and 132...")
-    mask_out_beam = (~df_all["card"].isin([130,131,132]))
-    df_mpmt = df_all[mask_out_beam]
+    exclude_cards = [130, 131, 132]
 
-    cards  = np.unique(df_mpmt["card"])
-    events = np.unique(df_mpmt["evt"])
+    cards  = np.unique(df_all["card"])
+    events = np.unique(df_all["evt"])
 
-    print("Creating the Dicitionary...")
+    print("Creating the Dictionary...")
     df_mpmt_compact = {"evt": events}
     
     for card in tqdm(cards, total=len(cards)):
-        df_mpmt_compact["card"+str(card)+"_charge"] = df_mpmt[df_mpmt["card"].values == card].groupby("evt")["charge"].sum()
-        df_mpmt_compact["card"+str(card)+"_time"]   = df_mpmt[df_mpmt["card"].values == card].groupby("evt")["time"].mean()
-        df_mpmt_compact["card"+str(card)+"_nHits"]  = df_mpmt[df_mpmt["card"].values == card].groupby("evt")["time"].count()
+        df_card = df_all[df_all["card"] == card]
+        df_mpmt_compact[f"card{card}_charge"] = df_card.groupby("evt")["charge"].sum()
+        df_mpmt_compact[f"card{card}_time"]   = df_card.groupby("evt")["time"].mean()
+        df_mpmt_compact[f"card{card}_nHits"]  = df_card.groupby("evt")["time"].count()
 
-    df_mpmt_compact["event_total_charge"]    = df_mpmt.groupby("evt")["charge"].sum()
-    df_mpmt_compact["event_total_mean_time"] = df_mpmt.groupby("evt")["time"].mean()
-    df_mpmt_compact["event_total_nHits"]     = df_mpmt.groupby("evt")["time"].count()
+    # We filter here the beam monitor channels. We exclude them from the event charge and time computation
+    df_incl = df_all[~df_all["card"].isin(exclude_cards)]
+    
+    df_mpmt_compact["event_total_charge"]    = df_incl.groupby("evt")["charge"].sum()
+    df_mpmt_compact["event_total_mean_time"] = df_incl.groupby("evt")["time"].mean()
+    df_mpmt_compact["event_total_nHits"]     = df_incl.groupby("evt")["time"].count()
+
     print("Creating the DataFrame...")
 
     return pd.DataFrame(df_mpmt_compact)
+
+def filter_times_and_relocate_columns(df):
+    cols = df.columns.tolist()
+    cols.insert(1, cols.pop(cols.index('evt_number')))
+    cols.insert(2, cols.pop(cols.index('window_time')))
+    cols.insert(3, cols.pop(cols.index('part_number')))
+    df = df[cols]
+
+    f = df[(df["T0-0L_time"].values != 0) &
+           (df["T0-0R_time"].values != 0) &
+           (df["T0-1L_time"].values != 0) &
+           (df["T0-1R_time"].values != 0) &
+           (df["T1-0L_time"].values != 0) &
+           (df["T1-0R_time"].values != 0) &
+           (df["T1-1L_time"].values != 0) &
+           (df["T1-1R_time"].values != 0)].copy()
+    
+    return f, np.unique(f["evt"])
