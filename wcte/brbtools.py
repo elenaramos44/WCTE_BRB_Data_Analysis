@@ -175,29 +175,26 @@ def df_extend(df, numACTs):
         it computes the time in T0, T1 and the T1-T0 time difference
     return extended dt
     """
-    df = df.copy()  # por seguridad
-    new_cols = {}
 
-    def _operate(sens, vars, oper=np.sum):
+    def _operate(sens, vars, oper = np.sum):
         labs = [sen + var for var in vars for sen in sens]
-        vv = oper([df[lab].values for lab in labs], axis=0)
+        vv = oper([df[lab].values for lab in labs], axis = 0)
         return vv
-
-    new_cols['T0_time'] = _operate(['T0-0','T0-1'], ['L_time','R_time'], np.mean)
-    new_cols['T1_time'] = _operate(['T1-0','T1-1'], ['L_time','R_time'], np.mean)
-    new_cols['T1-T0_time'] = new_cols['T1_time'] - new_cols['T0_time']
+    
+    df['T0_time'] = _operate(['T0-0','T0-1'], ['L_time','R_time'], np.mean)
+    df['T1_time'] = _operate(['T1-0','T1-1'], ['L_time','R_time'], np.mean)
+    df['T1-T0_time'] = df['T1_time'] - df['T0_time']
 
     for i in range(numACTs):
-        new_cols[f'ACT{i}_charge'] = _operate([f'ACT{i}-'], ['L_charge', 'R_charge'], np.sum)
+        df['ACT'+str(i)+'_charge'] = _operate(['ACT'+str(i)+'-',], ['L_charge', 'R_charge'], np.sum)
 
-    new_cols['ACT_g1_charge'] = np.sum([new_cols[f'ACT{i}_charge'] for i in (0, 1, 2)], axis=0)
-    new_cols['ACT_g2_charge'] = np.sum([new_cols[f'ACT{i}_charge'] for i in (3, 4, 5)], axis=0)
+    df['ACT_g1_charge'] = np.sum([df['ACT'+str(i)+'_charge'] for i in (0, 1, 2)], axis = 0)
+    df['ACT_g2_charge'] = np.sum([df['ACT'+str(i)+'_charge'] for i in (3, 4, 5)], axis = 0)
 
     tof_keys = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 'A', 'B', 'C', 'D', 'E', 'F']
-    new_cols['TOF_nhits'] = _operate([f'TOF-{k}' for k in tof_keys], ['_nhits'], np.sum)
+    df['TOF_nhits'] = _operate(['TOF-'+str(k) for k in tof_keys], ['_nhits', ], np.sum)
 
-    return pd.concat([df, pd.DataFrame(new_cols)], axis=1)
-
+    return df
 
 def full_df_mPMT(parts, run_files):
     dfs = []
