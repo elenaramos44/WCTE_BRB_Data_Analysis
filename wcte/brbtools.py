@@ -246,11 +246,11 @@ def df_mpmt_sumCharge(df_all):
     df_mpmt_compact = {"evt": events}
     
     for card in tqdm(cards, total=len(cards)):
-        df_mpmt_compact["mPMT"+str(card)+"_charge"] = df_mpmt[df_mpmt["card"].values == card].groupby("evt")["charge"].sum()
-        df_mpmt_compact["mPMT"+str(card)+"_time"]   = df_mpmt[df_mpmt["card"].values == card].groupby("evt")["time"].mean()
+        df_mpmt_compact["card"+str(card)+"_charge"] = df_mpmt[df_mpmt["card"].values == card].groupby("evt")["charge"].sum()
+        df_mpmt_compact["card"+str(card)+"_time"]   = df_mpmt[df_mpmt["card"].values == card].groupby("evt")["time"].mean()
 
-    df_mpmt_compact["mPMT_total_charge"]    = df_mpmt.groupby("evt")["charge"].sum()
-    df_mpmt_compact["mPMT_total_mean_time"] = df_mpmt.groupby("evt")["time"].mean()
+    df_mpmt_compact["card_total_charge"]    = df_mpmt.groupby("evt")["charge"].sum()
+    df_mpmt_compact["card_total_mean_time"] = df_mpmt.groupby("evt")["time"].mean()
     print("Creating the DataFrame...")
 
     return pd.DataFrame(df_mpmt_compact)
