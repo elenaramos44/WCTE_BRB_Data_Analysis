@@ -197,6 +197,15 @@ def df_extend(df, numACTs):
     return df
 
 def full_df_mPMT(parts, run_files):
+    """
+    Input:
+        - The good_parts previously selected
+        - The run files
+    Performs:
+        - Creates a new dataframe with all the charge and time per hit per eventm for all events in the parts.
+    Output:
+        - The dataframe for the whole run with event, card, channel, charge and time information.
+    """
     dfs = []
     evt_offset = 0
     
@@ -210,3 +219,38 @@ def full_df_mPMT(parts, run_files):
         dfs.append(df)
 
     return pd.concat(dfs, ignore_index=True)
+
+def df_mpmt_sumCharge(df_all):
+    """
+    Input:
+        - The "df_concat" dataframe with the whole information created with "full_df_mPMT"
+    Performs:
+        - Removes cards 130, 131 adn 132 since those are not mPMTs
+        - Creates a new dictionary with:
+            - Number of events in run
+            - Charge per event per mPMT summed
+            - Time per event per mPMT averaged
+            - Charge per event summed over all mPMTs
+            - Time per event averaged over all mpMTs
+    Output:
+        - A new dataframe with this information
+    """
+    print("Masking out cards 130, 131 and 132...")
+    mask_out_beam = (~df_all["card"].isin([130,131,132]))
+    df_mpmt = df_all[mask_out_beam]
+
+    cards  = np.unique(df_mpmt["card"])
+    events = np.unique(df_mpmt["evt"])
+
+    print("Creating the Dicitionary...")
+    df_mpmt_compact = {"evt": events}
+    
+    for card in tqdm(cards, total=len(cards)):
+        df_mpmt_compact["mPMT"+str(card)+"_charge"] = df_mpmt[df_mpmt["card"].values == card].groupby("evt")["charge"].sum()
+        df_mpmt_compact["mPMT"+str(card)+"_time"]   = df_mpmt[df_mpmt["card"].values == card].groupby("evt")["time"].mean()
+
+    df_mpmt_compact["mPMT_total_charge"]    = df_mpmt.groupby("evt")["charge"].sum()
+    df_mpmt_compact["mPMT_total_mean_time"] = df_mpmt.groupby("evt")["time"].mean()
+    print("Creating the DataFrame...")
+
+    return pd.DataFrame(df_mpmt_compact)
