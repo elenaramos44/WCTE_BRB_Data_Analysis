@@ -65,7 +65,11 @@ def select_good_parts(parts, run_files):
     Selects the part files that are not empty.
     Returns an updated list of usable part_files.
     """
-    return [part_file for part_file in tqdm(parts, total=len(parts), desc="Selecting Good Parts") if np.any(uproot.open(run_files[part_file]+":WCTEReadoutWindows")["event_number"].array())]
+    return [
+        part_file 
+        for part_file in tqdm(parts, total=len(parts), desc="Selecting Good Parts") 
+        if np.any(uproot.open(run_files[part_file]+":WCTEReadoutWindows")["event_number"].array())
+        ]
 
 def get_files_from_part(part_file, run_files):
     """
