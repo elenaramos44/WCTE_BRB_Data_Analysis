@@ -1,0 +1,4 @@
+/var/spool/slurmd/job2727490/slurm_script: line 9: /dipc/elena/awkward_env/bin/activate: No such file or directory
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+ModuleNotFoundError: No module named 'awkward'

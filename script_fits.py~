@@ -1,0 +1,104 @@
+import numpy as np
+from scipy.stats import norm
+from scipy.optimize import minimize
+import os
+from glob import glob
+
+def load_waveforms(npz_file):
+    data = np.load(npz_file)
+    return data["waveforms"]  # shape: (n_events, n_bins)
+
+def compute_charges(waveforms, integration_window=(-5, 2)):
+    charges = []
+    for wf in waveforms:
+        baseline = np.mean(wf[:10])
+        wf_corr = wf - baseline
+        peak = np.argmax(wf_corr)
+        start = max(peak + integration_window[0], 0)
+        end = min(peak + integration_window[1] + 1, len(wf))
+        charge = np.sum(wf_corr[start:end])
+        charges.append(charge)
+    return np.array(charges)
+
+# Gaussian negative log-likelihood
+def nll(params, data):
+    mu, sigma = params
+    if sigma <= 0:
+        return np.inf
+    return -np.sum(norm.logpdf(data, mu, sigma))
+
+# Rango ejemplo, adaptalo a tus datos reales:
+card_ids = range(29, 31)  # ej. 29 y 30
+slot_ids = range(50, 52)  # ej. 50 y 51
+channel_ids = range(0, 19)  # ej. 0 a 18 inclusive
+
+run_signal = 2521
+run_control = 2519
+
+results = []
+
+for card_id in card_ids:
+    for slot_id in slot_ids:
+        for channel_id in channel_ids:
+            pmt_label = f"card{card_id}_slot{slot_id}_ch{channel_id}"
+            signal_npz = f"/scratch/elena/waveform_npz/run{run_signal}/{pmt_label}.npz"
+            control_npz = f"/scratch/elena/waveform_npz/run{run_control}/{pmt_label}.npz"
+            
+            if not os.path.isfile(signal_npz) or not os.path.isfile(control_npz):
+                # No existe archivo, saltamos
+                continue
+
+            try:
+                signal_waveforms = load_waveforms(signal_npz)
+                control_waveforms = load_waveforms(control_npz)
+
+                # Calculamos cargas
+                signal_charges = compute_charges(signal_waveforms)
+                control_charges = compute_charges(control_waveforms)
+
+                # Filtramos pedestal control < pedestal_max
+                pedestal_max = 20
+                pedestal_data = control_charges[control_charges < pedestal_max]
+                if len(pedestal_data) < 10:
+                    # pocos datos, salteamos
+                    continue
+
+                # Fit pedestal
+                p0 = [np.mean(pedestal_data), np.std(pedestal_data)]
+                res = minimize(nll, p0, args=(pedestal_data,), bounds=[(-5, 5), (0.01, 10)])
+                mu_fit, sigma_fit = res.x
+
+                # Definimos rango s.p.e. respecto pedestal
+                spe_min = mu_fit + 100
+                spe_max = mu_fit + 300
+                spe_data = signal_charges[(signal_charges > spe_min) & (signal_charges < spe_max)]
+                if len(spe_data) < 10:
+                    continue
+
+                # Fit s.p.e.
+                p0_spe = [np.mean(spe_data), np.std(spe_data)]
+                res_spe = minimize(nll, p0_spe, args=(spe_data,), bounds=[(spe_min, spe_max), (0.01, 50)])
+                mu_spe_fit, sigma_spe_fit = res_spe.x
+		
+                gain = mu_spe_fit - mu_fit
+                results.append((
+                    card_id, slot_id, channel_id,
+                    mu_fit, sigma_fit,
+                    mu_spe_fit, sigma_spe_fit, gain
+                ))
+
+                print(f"card{card_id} slot{slot_id} ch{channel_id}: pedestal mean={mu_fit:.3f}, sigma={sigma_fit:.3f} | s.p.e. mean={mu_spe_fit:.3f}, sigma={sigma_spe_fit:.3f} | gain={gain:.3f}")
+
+
+            except Exception as e:
+                print(f"Error processing {pmt_label}: {e}")
+
+# Guardar resultados en npz
+results_np = np.array(results, dtype=[('card_id','i4'), ('slot_id','i4'), ('channel_id','i4'),
+                                      ('pedestal_mean','f8'), ('pedestal_sigma','f8'),
+                                      ('spe_mean','f8'),
+				      ('spe_sigma','f8'),
+				      ('gain','f8')])
+
+np.savez("pmt_charge_fit_results.npz", results=results_np)
+print(f"Guardados {len(results)} resultados en pmt_charge_fit_results.npz")

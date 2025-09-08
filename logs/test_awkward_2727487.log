@@ -1,0 +1,4 @@
+WCSim environment setup complete!
+HOME=/dipc/elena
+PYTHONPATH=/dipc/elena/.local/lib/python3.7/site-packages
+Usando python en: /scratch/scicomp/easybuild/CentOS/7.3.1611/Haswell/software/Python/3.7.4-GCCcore-8.3.0/bin/python
