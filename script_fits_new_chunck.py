@@ -31,8 +31,8 @@ control_pmts = set(f.replace(".npz", "") for f in control_files)
 pmts_both = sorted(list(signal_pmts & control_pmts))
 
 # ----------------- INTEGRATION -----------------
-pre_peak   = 5
-post_peak  = 2
+pre_peak   = 4
+post_peak  = 1
 ped_window = 4
 
 def load_waveforms(npz_file):
@@ -166,7 +166,7 @@ dtype = np.dtype([
 ])
 
 results_array = np.array(results_list, dtype=dtype)
-npz_file_out = f"/scratch/elena/WCTE_2025_commissioning/2025_data/WCTE_BRB_Data_Analysis/pmt_charge_fit_results_doubleGauss_{chunk_id}_[-5,2].npz"
+npz_file_out = f"/scratch/elena/WCTE_2025_commissioning/2025_data/WCTE_BRB_Data_Analysis/pmt_charge_fit_results_doubleGauss_{chunk_id}_[-4,1].npz"
 np.savez(npz_file_out, results=results_array)
 
 if not failed_pmts:
